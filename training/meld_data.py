@@ -5,6 +5,8 @@ from transformers import AutoTokenizer
 import cv2
 import numpy as np
 import torch
+import subprocess
+import torchaudio
 
 class MELDDataset(Dataset):
     def __init__(self,csv_path,vdo_dir):
@@ -63,6 +65,42 @@ class MELDDataset(Dataset):
         #Before permute: [frames,height,width,channels]
         #after permute: [frames,channels,height,width]
         return torch.FloatTensor(np.array(frames)).permute(0,3,1,2)
+    
+    def _extract_audio_features(self,video_path):
+        audio_path = video_path.replace('mp4','.wav')
+        try:
+            subprocess.run([
+                'ffmpeg',
+                '-i',video_path,
+                '-vn',
+                '-acodec','pcm_s16le',
+                '-ar','16000',
+                '-ac','1',
+                audio_path
+            ],check=True, stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            
+            waveform,sample_rate=torchaudio.load(audio_path)
+            
+            if sample_rate!=16000:
+                resampler = torchaudio.transforms.Resample(sample_rate,16000)
+                waveform=resampler(waveform)
+            mel_spectrogram = torchaudio.transforms.MelSpectrogram(
+                sample_rate=16000,
+                n_mels=64,
+                n_fft=1024,
+                hop_length=512    
+            )
+            
+            mel_spec = mel_spectrogram(waveform)
+            #normalize
+            mel_spec=(mel_spec-mel_spec.mean()) / mel_spec.std()
+            if mel_spec.size(2)<300:
+                padding=300-mel_spec.size(2)
+                mel_spec=torch.nn.functional.pad(mel_spec,(0,padding))
+            
+                
+        except Exception as e:
+            raise ValueError(f"Audio error: {str(e)}")
        
     def __len__(self):
         return len(self.data)
@@ -82,8 +120,9 @@ class MELDDataset(Dataset):
                                      max_length=128,
                                      return_tensors='pt')
         
-        video_frames = self.__load_video_frames(path)
-        print(video_frames)
+        #video_frames = self._load_video_frames(path)
+        self._extract_audio_features(path)
+        #print(video_frames)
         
         
 if __name__ == "__main__":
