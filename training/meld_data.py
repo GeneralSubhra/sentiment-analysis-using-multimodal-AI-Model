@@ -97,10 +97,18 @@ class MELDDataset(Dataset):
             if mel_spec.size(2)<300:
                 padding=300-mel_spec.size(2)
                 mel_spec=torch.nn.functional.pad(mel_spec,(0,padding))
-            
+            else:
+                mel_spec=mel_spec[:,:,:300]
                 
+            return mel_spec
+        
+        except subprocess.CalledProcessError as e:
+            raise ValueError(f"audio extraction failed: {str(e)}")      
         except Exception as e:
             raise ValueError(f"Audio error: {str(e)}")
+        finally:
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
        
     def __len__(self):
         return len(self.data)
@@ -120,9 +128,25 @@ class MELDDataset(Dataset):
                                      max_length=128,
                                      return_tensors='pt')
         
-        #video_frames = self._load_video_frames(path)
-        self._extract_audio_features(path)
+        video_frames = self._load_video_frames(path)
+        audio_features=self._extract_audio_features(path)
+        print(audio_features)
+        
+        #Map sentiment and emo level
+        emotion_label = self.emotion_map[row['Emotion'].lower()]
+        sentiment_label = self.sentiment_label[row['Sentiment'].lower()]
+        return{
+            'text_inputs':{
+                'input_id': text_inputs['input_id'].squeeze(),
+                'attention_mask': text_inputs['attention_mask'].squeeze()
+            },
+            'video_frames':video_frames,
+            'audio_features':audio_features,
+            'emotion_label':torch.tensor(emotion_label),
+            "sentiment_label":torch.tensor(sentiment_label)
+        }
         #print(video_frames)
+        
         
         
 if __name__ == "__main__":
