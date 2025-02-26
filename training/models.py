@@ -35,6 +35,9 @@ class VideoEncoder(nn.Module):
         )
     
     def forward(self,x):
+        #batchsize,frames,channel,height,width->bsize,ch,frame,h,w
         x = x.transpose(1,2)
+        return self.backbone(x)
+        
             
             
