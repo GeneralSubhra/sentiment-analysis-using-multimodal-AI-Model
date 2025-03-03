@@ -68,5 +68,19 @@ class AudioEncoder(nn.Module):
     def forward(self,x):
         x=x.squeeze(1)
         
+        features  =self.conv_layers(x)
+        return self.projection(features.squeeze(-1)) 
+        
 
-    
+class MultimodalSentimentModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+        self.text_encoder = TextEncoder()
+        self.video_encoder = VideoEncoder()
+        self.audio_encoder = AudioEncoder()
+        
+        #Fusion 
+        
+        
+        
