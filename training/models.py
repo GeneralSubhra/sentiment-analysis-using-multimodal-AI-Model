@@ -3,6 +3,8 @@ import torch.nn as nn
 from transformers import BertModel
 from torchvision import models as vision_models
 
+from training.meld_data import MELDDataset
+
 
 class TextEncoder(nn.Module):
     def __init__(self):
@@ -81,6 +83,55 @@ class MultimodalSentimentModel(nn.Module):
         self.audio_encoder = AudioEncoder()
         
         #Fusion 
+        self.fusion_layer = nn.Sequential(
+            nn.Linear(128*3,256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Dropout(0.3)
+        )
         
+        #classifcation heads
+        self.emotion_classifier = nn.Sequential(
+            nn.Linear(256,64),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(64,7) #7 emo classes
+        )
+        self.sentiment_classifier = nn.Sequential(
+            nn.Linear(256,64),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(64,3) #3 senti classes
+        )
+    
+    def forward(self,text_inputs,video_frames,audio_features):
+        text_features = self.text_encoder(
+            text_inputs['input_ids'],
+            text_inputs['attention_mask'],
+        )
+        audio_features=self.audio_encoder(audio_features)
+        video_features = self.video_encoder(video_features)
         
+        #concat multimodal features
+        combined_features=torch.cat([text_features,video_features,audio_features],dim=1)
+        fused_features=self.fusion_layer(combined_features)
         
+        emotion_output=self.emotion_classifier(fused_features)
+        sentiment_output=self.sentiment_classifier(fused_features)
+        
+        return{
+            'emotions':emotion_output,
+            'sentiments':sentiment_output
+        }
+        
+if __name__ == "__main__":
+    dataset = MELDDataset(
+        'D:\sentiment aanalysis\dataset\train\train_sent_emo.csv',
+        'D:\sentiment aanalysis\dataset\train\train_splits'
+    )
+    
+    sample = dataset[0]
+    model = MultimodalSentimentModel()
+    model.eval()
+    
+    
