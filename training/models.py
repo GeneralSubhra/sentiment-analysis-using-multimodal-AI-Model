@@ -2,9 +2,7 @@ import torch
 import torch.nn as nn 
 from transformers import BertModel
 from torchvision import models as vision_models
-
-from training.meld_data import MELDDataset
-
+from meld_data import MELDDataset
 
 class TextEncoder(nn.Module):
     def __init__(self):
@@ -19,8 +17,8 @@ class TextEncoder(nn.Module):
         #Extract bert embeddings
         outputs= self.bert(input_ids=input_ids,attention_mask=attention_mask)
         #use [CLS] token representation
-        pooled_output = outputs.pooled_output
-        return self.projection(pooled_output)
+        pooler_output = outputs.pooler_output
+        return self.projection(pooler_output)
         
 class VideoEncoder(nn.Module):
     def __init__(self):
@@ -103,35 +101,71 @@ class MultimodalSentimentModel(nn.Module):
             nn.Dropout(0.2),
             nn.Linear(64,3) #3 senti classes
         )
-    
-    def forward(self,text_inputs,video_frames,audio_features):
+    def forward(self, text_inputs, video_frames, audio_features):
         text_features = self.text_encoder(
             text_inputs['input_ids'],
             text_inputs['attention_mask'],
         )
-        audio_features=self.audio_encoder(audio_features)
-        video_features = self.video_encoder(video_features)
-        
-        #concat multimodal features
-        combined_features=torch.cat([text_features,video_features,audio_features],dim=1)
-        fused_features=self.fusion_layer(combined_features)
-        
-        emotion_output=self.emotion_classifier(fused_features)
-        sentiment_output=self.sentiment_classifier(fused_features)
-        
-        return{
-            'emotions':emotion_output,
-            'sentiments':sentiment_output
+        video_features = self.video_encoder(video_frames)
+        audio_features = self.audio_encoder(audio_features)
+
+        # Concatenate multimodal features
+        combined_features = torch.cat([
+            text_features,
+            video_features,
+            audio_features
+        ], dim=1)  # [batch_size, 128 * 3]
+
+        fused_features = self.fusion_layer(combined_features)
+
+        emotion_output = self.emotion_classifier(fused_features)
+        sentiment_output = self.sentiment_classifier(fused_features)
+
+        return {
+            'emotions': emotion_output,
+            'sentiments': sentiment_output
         }
         
 if __name__ == "__main__":
     dataset = MELDDataset(
-        'D:\sentiment aanalysis\dataset\train\train_sent_emo.csv',
-        'D:\sentiment aanalysis\dataset\train\train_splits'
+    r"D:\sentiment aanalysis\dataset\train\train_sent_emo.csv",
+    r"D:\sentiment aanalysis\dataset\train\train_splits"
     )
-    
+
     sample = dataset[0]
     model = MultimodalSentimentModel()
     model.eval()
     
+    text_inputs = {
+        'input_ids' : sample['text_inputs']['input_ids'].unsqueeze(0),
+        'attention_mask' : sample['text_inputs']['attention_mask'].unsqueeze(0)
+    }
+
+    video_frames = sample['video_frames'].unsqueeze(0)
+    audio_features = sample['audio_features'].unsqueeze(0)
     
+    with torch.inference_mode():
+        outputs = model(text_inputs,video_frames,audio_features)
+        emotion_probs = torch.softmax(outputs['emotions'],dim=1)[0]
+        sentiment_probs = torch.softmax(outputs['sentiments'],dim=1)[0]
+        
+    emotion_map = {
+            0:'anger',
+            1:'disgust',
+            2:'fear',
+            3:'joy',
+            4:'neutral',
+            5:'sadness',
+            6:'surprise'    
+    }  
+    sentiment_map={
+            0:'negative',
+            1:'neutral',
+            2:'positive'
+    }
+    
+    for i,prob in enumerate(emotion_probs):
+        print(f"{emotion_map[i]}:{prob:.2f}")
+    for i,prob in enumerate(sentiment_probs):
+        print(f"{sentiment_map[i]}:{prob:.2f}")
+    print("Prediction for uttrance")
