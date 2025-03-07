@@ -126,6 +126,47 @@ class MultimodalSentimentModel(nn.Module):
             'sentiments': sentiment_output
         }
         
+class MultimodalTrainer:
+    def __init__(self,model,train_loader,val_loader):
+        self.model = model
+        self.train_loader = train_loader
+        self.val_loader =val_loader
+        #log dataset size
+        train_size = len(train_loader.dataset)
+        val_size = len(val_loader.dataset)
+        print("\nDataset sizes:")
+        print(f"Training samples: {train_size:,}")
+        print(f"validation samples: {val_size:,}")
+        print(f"Batches per epoch: {len(train_loader):,}")
+        
+        self.optimizer = torch.optim.Adam([
+            {'params': model.text_encoder.parameters(), 'lr': 8e-6},
+            {'params': model.video_encoder.parameters(), 'lr': 8e-5},
+            {'params': model.audio_encoder.parameters(), 'lr': 8e-5},
+            {'params': model.fusion_layer.parameters(), 'lr': 5e-4},
+            {'params': model.emotion_classifier.parameters(), 'lr': 5e-4},
+            {'params': model.sentiment_classifier.parameters(), 'lr': 5e-4}
+        ], weight_decay=1e-5).
+        
+        #scheduler added
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode="min",
+            factor=0.1,
+            patience=2,
+            verbose=True
+        ) 
+        #loss function
+        self.emotion_criterion = nn.CrossEntropyLoss(
+            label_smoothing=0.05
+        )
+
+        self.sentiment_criterion = nn.CrossEntropyLoss(
+            label_smoothing=0.05
+        ) 
+    def train_epoch(self):
+                  
+        
 if __name__ == "__main__":
     dataset = MELDDataset(
     r"D:\sentiment aanalysis\dataset\train\train_sent_emo.csv",
