@@ -165,6 +165,31 @@ class MultimodalTrainer:
             label_smoothing=0.05
         ) 
     def train_epoch(self):
+        self.model.train()
+        running_loss = {'total':0,
+                        'emotion':0,
+                        'sentiment':0}
+        
+        for batch in self.train_loader:
+            device = next(self.model.parameters()).device
+            text_inputs={
+                'input_ids': batch['text_input']['text_input'].to(device),
+                'attention_mask': batch['text_input']['attention_mask'].to(device)
+            }
+            video_frames = batch['video_frames'].to(device)
+            audio_features = batch['audio_features'].to(device)
+            emotion_labels = batch['emotion_label'].to(device)
+            sentiment_labels = batch['sentiment_label'].to(device)                   
+            self.optimizer.zero_grad()  
+            outputs = self.model(text_inputs, video_frames, audio_features)#forward pass
+            
+            # Calculate losses using raw logits
+            emotion_loss = self.emotion_criterion(
+                outputs["emotions"], emotion_labels)
+            sentiment_loss = self.sentiment_criterion(
+                outputs["sentiments"], sentiment_labels)
+            total_loss = emotion_loss + sentiment_loss
+     
                   
         
 if __name__ == "__main__":
