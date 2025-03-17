@@ -6,3 +6,5 @@ pandas
 opencv-python
 numpy
 soundfile
+scikit-learn
+tensorboard
