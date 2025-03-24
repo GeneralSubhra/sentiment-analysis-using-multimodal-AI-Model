@@ -8,3 +8,5 @@ numpy
 soundfile
 scikit-learn
 tensorboard
+tqdm
+sagemaker
